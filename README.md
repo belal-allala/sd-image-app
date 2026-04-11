@@ -7,8 +7,9 @@ Visionary est une application web de génération d'images par Intelligence Arti
 - **Text-to-Image** : Transformez de simples descriptions textuelles (*prompts*) en images détaillées.
 - **Curseur de Qualité** : Ajustez facilement le nombre d'étapes d'inférence via un curseur fluide pour privilégier la rapidité ou la qualité des détails.
 - **Accélération matérielle** : Détection automatique de votre carte graphique (NVIDIA CUDA) pour des générations accélérées optimisées en utilisant `float16`. 
-- **Design Premium** : Interface dynamique avec des effets de verre dépoli, arrière-plan galactique animé et retours visuels soignés.
-- **Téléchargement Local** : Sauvegardez instantanément vos créations sur votre machine en un clic.
+- **Suivi en temps réel** : Visualisez l'avancement de la génération (0-100%) grâce à une barre de progression dynamique synchronisée via WebSocket.
+- **Design Premium** : Interface moderne avec effets de verre dépoli (Glassmorphism), arrière-plan animé et animations fluides.
+- **Téléchargement Local** : Sauvegardez instantanément vos créations au format PNG.
 
 ---
 
@@ -26,7 +27,7 @@ sd-image-app/
     ├── css/
     │   └── style.css      # Design esthétique et animations
     └── js/
-        └── script.js      # Logique, requêtes en tâche de fond (Fetch API) 
+        └── script.js      # Logique, communication WebSocket et UI
 ```
 
 ---
@@ -55,10 +56,10 @@ python -m venv venv
 
 ### 3. Installation des dépendances
 
-Installez les bibliothèques requises pour faire tourner l'IA et le serveur local :
+Installez les bibliothèques requises (incluant `websockets` pour le suivi en direct) :
 
 ```powershell
-pip install fastapi uvicorn torch diffusers transformers accelerate
+pip install fastapi uvicorn websockets torch diffusers transformers accelerate
 ```
 
 ### 4. Démarrer l'application
