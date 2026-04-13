@@ -1,140 +1,145 @@
 import os
+import io
+import json
 import base64
 import asyncio
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from diffusers import StableDiffusionPipeline
 import torch
-import io
 
-# Initialisation de l'application FastAPI
-app = FastAPI(title="Visionary - Stable Diffusion AI")
+# ==========================================
+#        SERVICE IMAGE (WEBSOCKETS READY)
+# ==========================================
 
-# Sécurité : Configuration du middleware CORS
+class ImageService:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ImageService, cls).__new__(cls)
+            cls._instance._initialize()
+        return cls._instance
+
+    def _initialize(self):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.dtype = torch.float16 if self.device == "cuda" else torch.float32
+        
+        try:
+            model_id = "runwayml/stable-diffusion-v1-5"
+            self.pipeline = StableDiffusionPipeline.from_pretrained(
+                model_id, torch_dtype=self.dtype, safety_checker=None
+            )
+            self.pipeline = self.pipeline.to(self.device)
+            self.pipeline.enable_attention_slicing()
+            print("[+] ImageService opérationnel.")
+        except Exception as e:
+            print(f"[-] Erreur Init : {e}")
+            self.pipeline = None
+
+    def generate_with_progress(self, prompt, width, height, label, websocket, loop):
+        """
+        Génère une image en envoyant les étapes via WebSocket.
+        """
+        steps = 15
+
+        def step_callback(pipe, step_index, timestep, callback_kwargs):
+            # Calcul du pourcentage pour l'image actuelle
+            percent = int((step_index / steps) * 100)
+            
+            # Message de progression thread-safe
+            asyncio.run_coroutine_threadsafe(
+                websocket.send_json({
+                    "type": "progress",
+                    "label": label,
+                    "value": percent
+                }),
+                loop
+            )
+            return callback_kwargs
+
+        # Appel du pipeline avec callback
+        result = self.pipeline(
+            prompt,
+            width=width,
+            height=height,
+            num_inference_steps=steps,
+            callback_on_step_end=step_callback
+        )
+        
+        image = result.images[0]
+        buffered = io.BytesIO()
+        image.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+service = ImageService()
+
+# ==========================================
+#          CONFIGURATION APP
+# ==========================================
+
+app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Optimisation : Détection du GPU (CUDA) et sélection du type de données
-device = "cuda" if torch.cuda.is_available() else "cpu"
-dtype = torch.float16 if device == "cuda" else torch.float32
-
-print(f"[*] Initialisation : Chargement du modèle sur {device.upper()} avec {dtype}...")
-
-# Chargement du modèle
-try:
-    model_id = "runwayml/stable-diffusion-v1-5"
-    pipeline = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=dtype)
-    pipeline = pipeline.to(device)
-    print("[+] Modèle chargé avec succès !")
-except Exception as e:
-    print(f"[-] Erreur au chargement du modèle: {e}")
-    pipeline = None
-
 # ==========================================
-#          ROUTES API (BACKEND)
+#          ROUTE WEBSOCKET (REAL-TIME)
 # ==========================================
-
-@app.get("/api/generate")
-def generate_image(prompt: str, steps: int = 20):
-    """
-    Route API classique (HTTP) pour générer une image.
-    """
-    if not pipeline:
-        return Response(content="Modèle non initialisé.", status_code=500)
-    
-    print(f"[*] Génération (HTTP) en cours pour : '{prompt}' ({steps} étapes)")
-    try:
-        result = pipeline(prompt, num_inference_steps=steps)
-        image = result.images[0]
-        
-        memory_stream = io.BytesIO()
-        image.save(memory_stream, format="PNG")
-        memory_stream.seek(0)
-        
-        return Response(content=memory_stream.getvalue(), media_type="image/png")
-    except Exception as e:
-        print(f"[-] Erreur de génération : {e}")
-        return Response(content=str(e), status_code=500)
 
 @app.websocket("/ws/generate")
 async def websocket_generate(websocket: WebSocket):
-    """
-    Route WebSocket pour générer une image avec progression en temps réel.
-    """
     await websocket.accept()
     loop = asyncio.get_running_loop()
     
     try:
-        # Réception des paramètres
-        params = await websocket.receive_json()
-        prompt = params.get("prompt")
-        steps = params.get("steps", 20)
+        # Attente du message initial avec le prompt
+        msg = await websocket.receive_json()
+        prompt = msg.get("prompt")
         
-        if not pipeline:
-            await websocket.send_json({"type": "error", "message": "Modèle non initialisé."})
-            await websocket.close()
+        if not prompt:
+            await websocket.send_json({"type": "error", "message": "Prompt vide."})
             return
 
-        print(f"[*] Génération (WS) en cours : '{prompt}'")
+        formats = [
+            {"label": "WhatsApp Story", "width": 512, "height": 768},
+            {"label": "Instagram Post", "width": 512, "height": 512},
+            {"label": "Facebook Cover", "width": 768, "height": 512},
+            {"label": "Standard Photo", "width": 640, "height": 480}
+        ]
 
-        # Callback pour envoyer la progression
-        def progress_callback(step, timestep, latents):
-            percent = int(((step + 1) / steps) * 100)
-            # Thread-safe send
-            asyncio.run_coroutine_threadsafe(
-                websocket.send_json({"type": "progress", "value": min(percent, 100)}),
-                loop
+        for fmt in formats:
+            # On exécute la génération lourde dans un thread séparé
+            b64_img = await asyncio.to_thread(
+                service.generate_with_progress, 
+                prompt, fmt['width'], fmt['height'], fmt['label'], websocket, loop
             )
+            
+            # Envoi de l'image finale
+            await websocket.send_json({
+                "type": "image",
+                "label": fmt['label'],
+                "base64": f"data:image/png;base64,{b64_img}"
+            })
 
-        # Exécution dans un thread pour ne pas bloquer le loop
-        def run_inference():
-            return pipeline(
-                prompt, 
-                num_inference_steps=steps, 
-                callback=progress_callback, 
-                callback_steps=1
-            )
-
-        result = await asyncio.to_thread(run_inference)
-        image = result.images[0]
-        
-        # Encodage en base64
-        memory_stream = io.BytesIO()
-        image.save(memory_stream, format="PNG")
-        img_str = base64.b64encode(memory_stream.getvalue()).decode("utf-8")
-        
-        # Envoi de l'image finale
-        await websocket.send_json({
-            "type": "finish",
-            "image": f"data:image/png;base64,{img_str}"
-        })
+        await websocket.send_json({"type": "complete"})
 
     except WebSocketDisconnect:
-        print("[*] WebSocket déconnecté par le client.")
+        print("[*] Client déconnecté.")
     except Exception as e:
-        print(f"[-] Erreur WebSocket : {e}")
+        print(f"[-] Erreur WS : {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
-        except:
-            pass
+        except: pass
 
 # ==========================================
-#          FRONTEND (STATIC FILES)
+#          STATICS
 # ==========================================
 
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend")
-
-try:
-    # Créer le répertoire si cela n'existe pas en memoire (juste par precaution)
-    os.makedirs(frontend_path, exist_ok=True)
-    # Lier le dossier frontend à la racine
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-    print(f"[+] Frontend mapé au dossier : {frontend_path}")
-except Exception as e:
-    print(f"[-] Erreur lors du montage du frontend : {e}")
+app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

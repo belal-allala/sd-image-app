@@ -1,84 +1,52 @@
-# Visionary - Stable Diffusion Image Generator 🎨
+# Visionary - Stable Diffusion AI (v4.0 WebSocket) 🎨✨
 
-Visionary est une application web de génération d'images par Intelligence Artificielle (Text-to-Image) qui utilise le modèle **Stable Diffusion v1.5**. Elle est propulsée par un backend **FastAPI** très performant et offre une interface utilisateur moderne (style *Glassmorphism*) développée en HTML/CSS/JS.
+Visionary est une application web de pointe pour la génération d'images par Intelligence Artificielle. Cette version exploite les **WebSockets** pour offrir une expérience ultra-réactive avec un suivi de progression étape par étape.
 
-## 🌟 Fonctionnalités
+## 🌟 Nouvelles Fonctionnalités (v4.0)
 
-- **Text-to-Image** : Transformez de simples descriptions textuelles (*prompts*) en images détaillées.
-- **Curseur de Qualité** : Ajustez facilement le nombre d'étapes d'inférence via un curseur fluide pour privilégier la rapidité ou la qualité des détails.
-- **Accélération matérielle** : Détection automatique de votre carte graphique (NVIDIA CUDA) pour des générations accélérées optimisées en utilisant `float16`. 
-- **Suivi en temps réel** : Visualisez l'avancement de la génération (0-100%) grâce à une barre de progression dynamique synchronisée via WebSocket.
-- **Design Premium** : Interface moderne avec effets de verre dépoli (Glassmorphism), arrière-plan animé et animations fluides.
-- **Téléchargement Local** : Sauvegardez instantanément vos créations au format PNG.
+- **Suivi Granulaire** : Voyez l'avancement exact (0-100%) de la génération pour chaque format.
+- **Ratios Réels** : L'interface respecte les dimensions physiques de chaque format (Vertical pour Story, Carré pour Instagram, Large pour Facebook).
+- **Architecture Modulaire** : Code structuré en services (ImageService, SocketService, UIManager) pour une performance maximale.
+- **WebSocket Dual-Way** : Communication bidirectionnelle entre le client et le serveur.
 
 ---
 
-## 🏗️ Architecture du Projet
+## 🏗️ Formats de Sortie Automatiques
 
-Le projet a été pensé pour être simple et robuste. FastAPI gère à la fois l'API (pour générer l'image avec Python) et la distribution des fichiers de l'interface utilisateur.
-
-```text
-sd-image-app/
-│
-├── main.py                # Backend principal (IA + Serveur)
-├── README.md              # Documentation du projet
-└── frontend/              # Fichiers de l'interface utilisateur visuelle
-    ├── index.html         # Structure de l'application Web
-    ├── css/
-    │   └── style.css      # Design esthétique et animations
-    └── js/
-        └── script.js      # Logique, communication WebSocket et UI
-```
+À chaque session, Visionary génère simultanément :
+1.  **WhatsApp Story** : 512x768 (Ratio 2:3 vertical)
+2.  **Instagram Post** : 512x512 (Ratio 1:1 carré)
+3.  **Facebook Cover** : 768x512 (Ratio 3:2 large)
+4.  **Standard Photo** : 640x480 (Ratio 4:3 classique)
 
 ---
 
-## 🚀 Guide d'Installation et d'Utilisation
+## 🚀 Guide d'Utilisation
 
-### 1. Prérequis
-
-Assurez-vous d'avoir installé sur votre machine :
-- **Python 3.8+**
-- (Optionnel mais fortement recommandé) Une carte graphique NVIDIA avec les pilotes à jour pour des générations d'images beaucoup plus rapides.
-
-### 2. Configuration de l'environnement (Windows)
-
-Ouvrez un terminal (PowerShell) dans le dossier du projet, puis créez et activez un environnement virtuel pour isoler le projet :
-
-```powershell
-# 1. Créer l'environnement virtuel
-python -m venv venv
-
-# 2. L'activer
-.\venv\Scripts\Activate.ps1
-```
-
-> **Aide Windows :** Si l'activation échoue avec un texte rouge (scripts désactivés), exécutez la commande `Set-ExecutionPolicy Unrestricted -Scope CurrentUser`, puis réessayez de l'activer.
-
-### 3. Installation des dépendances
-
-Installez les bibliothèques requises (incluant `websockets` pour le suivi en direct) :
-
+### 1. Installation des dépendances
+Ouvrez votre terminal et installez les bibliothèques nécessaires :
 ```powershell
 pip install fastapi uvicorn websockets torch diffusers transformers accelerate
 ```
 
-### 4. Démarrer l'application
-
-Vérifiez que votre environnement virtuel `(venv)` est bien visible sur la gauche de votre terminal, puis lancez le serveur :
-
+### 2. Lancement du serveur
+Lancez l'application avec Uvicorn :
 ```powershell
 uvicorn main:app --reload
 ```
 
-> **Attention au premier lancement :** Le programme devra télécharger automatiquement le modèle de l'Intelligence Artificielle en mémoire (environ 4 Go). Cela peut prendre quelques minutes. Les lancements suivants seront presque instantanés.
-
-### 5. Utiliser l'Interface
-
-1. Ouvrez votre navigateur web favori et naviguez vers l'adresse magique : **[http://localhost:8000](http://localhost:8000)**
-2. Dans la barre de recherche textuelle, décrivez précisément votre idée (ex: *"Une ville cyberpunk sous la pluie, réaliste, 8k"*). Plus la description est précise, meilleure sera l'association avec l'IA.
-3. Cliquez sur le bouton **Générer** (et attendez que l'IA rêve de votre image en tâche de fond !).
-4. Profitez de l'oeuvre et sauvegardez-la grâce au bouton **Sauvegarder l'image**.
+### 3. Utilisation de l'Interface
+1. Accédez à **[http://localhost:8000](http://localhost:8000)**.
+2. Saisissez une description textuelle (ex: *"Un astronaute pêchant sur la lune, style aquarelle"*).
+3. Cliquez sur **Démarrer la Session**.
+4. **Observez les barres de progression** sur chaque carte : elles reflètent le travail en temps réel de l'IA.
+5. Une fois l'image apparue, cliquez sur le **bouton de téléchargement** (icône flèche) pour sauvegarder le format souhaité.
 
 ---
 
-*Bonne génération ! Propulsé par Python et l'approche de développement par composants séparés.*
+## 💡 Conseils Techniques
+- **Accélération GPU** : Si vous avez une carte NVIDIA, l'application utilisera automatiquement CUDA pour des générations 10x plus rapides.
+- **Mode CPU** : Sur CPU, prévoyez environ 1 à 2 minutes par pack de 4 images. La barre de progression vous permet de suivre l'état sans deviner.
+
+---
+*Développé avec passion pour l'IA générative. Version 4.0.*

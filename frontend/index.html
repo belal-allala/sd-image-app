@@ -3,79 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visionary | Générateur d'Images IA</title>
-    
-    <!-- Google Fonts pour la typographie moderne -->
+    <title>Visionary WebSocket | Mode Temps Réel</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Liens vers les styles -->
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Arrière-plan animé dynamique -->
     <div class="background-globes">
         <div class="globe globe-1"></div>
         <div class="globe globe-2"></div>
     </div>
     
     <main class="container">
-        <!-- En-tête -->
         <header class="header">
-            <h1 class="logo">Visionary<span>.AI</span></h1>
-            <p class="subtitle">Transformez votre imagination en réalité visuelle avec Stable Diffusion</p>
+            <h1 class="logo">Visionary<span>.LIVE</span></h1>
+            <p class="subtitle">Suivi de génération ultra-précis par WebSocket</p>
         </header>
 
-        <!-- Interface principale avec effet Glassmorphism -->
         <div class="glass-panel">
-            
             <div class="input-section">
                 <div class="input-wrapper">
-                    <input type="text" id="prompt-input" placeholder="Décrivez votre idée... ex: 'Un chat cyborg dans une ville cyberpunk 4k'" autocomplete="off">
+                    <input type="text" id="prompt-input" placeholder="Décrivez votre vision..." autocomplete="off">
                 </div>
                 <button id="generate-btn" class="primary-btn">
-                    <span class="btn-text">Générer</span>
+                    <span class="btn-text">Démarrer la Session</span>
                     <span class="loader hidden"></span>
                 </button>
             </div>
 
-            <div class="settings-section">
-                <label for="steps-slider">Qualité (<span id="steps-value">20</span> étapes)</label>
-                <input type="range" id="steps-slider" min="5" max="50" value="20" class="slider">
+            <!-- Grille de résultats -->
+            <div class="result-grid" id="result-grid">
+                <!-- Les cartes seront injectées via JS (initPlaceholders) -->
             </div>
-
-            <!-- Barre de progression (masquée par défaut) -->
-            <div class="progress-container hidden" id="progress-container">
-                <div class="progress-info">
-                    <span id="progress-label">Génération...</span>
-                    <span id="progress-percent">0%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill"></div>
-                </div>
-            </div>
-
-            <!-- Zone de résultat (affichage de l'image) -->
-            <div class="result-section" id="result-section">
-                <div class="placeholder-content">
-                    <svg class="image-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                        <polyline points="21 15 16 10 5 21"></polyline>
-                    </svg>
-                    <p>Votre création apparaîtra ici</p>
-                </div>
-                <!-- L'image sera injectée ici en JS -->
-            </div>
-            
-            <!-- Actions bonus -->
-            <div class="actions-section hidden" id="actions-section">
-                <button id="download-btn" class="secondary-btn">Sauvegarder l'image</button>
-            </div>
-
         </div>
     </main>
 
-    <!-- Fichier de script -->
     <script src="js/script.js"></script>
 </body>
 </html>
