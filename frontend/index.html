@@ -3,40 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visionary WebSocket | Mode Temps Réel</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    <title>Visionary V3 - Hybrid Generator</title>
     <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Le script est différé (defer) pour garantir que le DOM est complètement chargé -->
+    <script src="js/script.js" defer></script>
 </head>
 <body>
-    <div class="background-globes">
-        <div class="globe globe-1"></div>
-        <div class="globe globe-2"></div>
-    </div>
-    
-    <main class="container">
-        <header class="header">
-            <h1 class="logo">Visionary<span>.LIVE</span></h1>
-            <p class="subtitle">Suivi de génération ultra-précis par WebSocket</p>
-        </header>
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar glass-panel">
+            <h1 class="logo">VISIONARY <span>V3</span></h1>
+            <p class="subtitle">Hybrid AI Generator</p>
 
-        <div class="glass-panel">
-            <div class="input-section">
-                <div class="input-wrapper">
-                    <input type="text" id="prompt-input" placeholder="Décrivez votre vision..." autocomplete="off">
+            <div class="control-group">
+                <label for="prompt">Prompt (Texte)</label>
+                <textarea id="prompt" placeholder="Décrivez votre image futuriste (ex: cyberpunk city neon lights)..."></textarea>
+            </div>
+
+            <div class="control-group">
+                <label>Image de Référence (Optionnel)</label>
+                <div class="upload-area" id="upload-area">
+                    <span id="upload-text">Glissez une image ou cliquez ici</span>
+                    <input type="file" id="image-upload" accept="image/*" hidden>
+                    <img id="image-preview" src="" alt="Preview" style="display: none;">
                 </div>
-                <button id="generate-btn" class="primary-btn">
-                    <span class="btn-text">Démarrer la Session</span>
-                    <span class="loader hidden"></span>
-                </button>
             </div>
 
-            <!-- Grille de résultats -->
-            <div class="result-grid" id="result-grid">
-                <!-- Les cartes seront injectées via JS (initPlaceholders) -->
+            <div class="control-group">
+                <label for="strength">Force de transformation (Fidélité source: <span id="strength-val">0.75</span>)</label>
+                <input type="range" id="strength" min="0.1" max="0.9" step="0.01" value="0.75">
             </div>
-        </div>
-    </main>
 
-    <script src="js/script.js"></script>
+            <div class="control-group">
+                <label>Formats Souhaités</label>
+                <div class="formats-list">
+                    <label class="format-checkbox">
+                        <input type="checkbox" value="whatsapp" data-name="WhatsApp Story" data-width="512" data-height="768" checked>
+                        <span class="checkmark"></span>
+                        WhatsApp Story (512x768)
+                    </label>
+                    <label class="format-checkbox">
+                        <input type="checkbox" value="instagram" data-name="Instagram Post" data-width="512" data-height="512" checked>
+                        <span class="checkmark"></span>
+                        Instagram Post (512x512)
+                    </label>
+                    <label class="format-checkbox">
+                        <input type="checkbox" value="facebook" data-name="Facebook Cover" data-width="768" data-height="512">
+                        <span class="checkmark"></span>
+                        Facebook Cover (768x512)
+                    </label>
+                    <label class="format-checkbox">
+                        <input type="checkbox" value="standard" data-name="Photo Standard" data-width="640" data-height="480">
+                        <span class="checkmark"></span>
+                        Photo Standard (640x480)
+                    </label>
+                </div>
+            </div>
+
+            <button id="generate-btn" class="glow-on-hover">GÉNÉRER</button>
+        </aside>
+
+        <!-- Main Output Area -->
+        <main class="output-area">
+            <header class="app-header">
+                <h2>CONSOLE DE CRÉATION</h2>
+                <div class="status-indicator">
+                    <span class="dot disconnected" id="ws-status"></span>
+                    <span id="ws-text">Déconnecté</span>
+                </div>
+            </header>
+            
+            <div class="results-grid" id="results-grid">
+                <!-- Les cartes s'afficheront ici -->
+                <div class="empty-state" id="empty-state">
+                    <p>En attente d'instructions...</p>
+                </div>
+            </div>
+        </main>
+    </div>
 </body>
 </html>

@@ -1,194 +1,244 @@
-/**
- * SOCKET SERVICE - Gère la connexion WebSocket bidirectionnelle
- */
-const SocketService = {
-    socket: null,
+document.addEventListener('DOMContentLoaded', () => {
+    // UI Elements with safely fallback checks
+    const uploadArea = document.getElementById('upload-area');
+    const imageUpload = document.getElementById('image-upload');
+    const imagePreview = document.getElementById('image-preview');
+    const uploadText = document.getElementById('upload-text');
+    const strengthSlider = document.getElementById('strength');
+    const strengthVal = document.getElementById('strength-val');
+    const generateBtn = document.getElementById('generate-btn');
+    const promptInput = document.getElementById('prompt');
+    const resultsGrid = document.getElementById('results-grid');
+    const emptyState = document.getElementById('empty-state');
+    const wsStatusDot = document.getElementById('ws-status');
+    const wsStatusText = document.getElementById('ws-text');
 
-    connect(onMessage, onOpen, onClose, onError) {
+    // Make sure we break gracefully if something is missing
+    if (!generateBtn) {
+        console.error("Critical UI component missing: 'generate-btn' not found in the DOM. Ensure index.html is loaded correctly.");
+        return;
+    }
+
+    let base64Image = null;
+    let ws = null;
+
+    // Connect WebSocket
+    function connectWebSocket() {
+        if (!wsStatusDot || !wsStatusText) return;
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/generate`;
+        const host = window.location.host || 'localhost:8000'; 
+        const wsUrl = `${protocol}//${host}/ws/generate`;
         
-        this.socket = new WebSocket(wsUrl);
+        ws = new WebSocket(wsUrl);
 
-        this.socket.onopen = onOpen;
-        this.socket.onclose = onClose;
-        this.socket.onerror = onError;
-        
-        this.socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            onMessage(data);
+        ws.onopen = () => {
+            wsStatusDot.classList.remove('disconnected');
+            wsStatusDot.classList.add('connected');
+            wsStatusText.textContent = 'CONNECTÉ';
+            if (generateBtn) generateBtn.disabled = false;
         };
-    },
 
-    send(data) {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify(data));
-        }
-    },
+        ws.onclose = () => {
+            wsStatusDot.classList.remove('connected');
+            wsStatusDot.classList.add('disconnected');
+            wsStatusText.textContent = 'DÉCONNECTÉ';
+            if (generateBtn) generateBtn.disabled = true;
+            setTimeout(connectWebSocket, 3000); // Auto reconnect
+        };
 
-    close() {
-        if (this.socket) this.socket.close();
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleWsMessage(data);
+        };
     }
-};
 
-/**
- * UI MANAGER - Gère les éléments visuels et les barres de progression
- */
-const UIManager = {
-    promptInput: document.getElementById('prompt-input'),
-    generateBtn: document.getElementById('generate-btn'),
-    resultGrid: document.getElementById('result-grid'),
-
-    initPlaceholders() {
-        const formats = ["WhatsApp Story", "Instagram Post", "Facebook Cover", "Standard Photo"];
-        this.resultGrid.innerHTML = '';
-        
-        formats.forEach((label) => {
-            const card = document.createElement('div');
-            card.className = 'format-card';
-            // On utilise le label comme ID simplifié pour le ciblage JS
-            const id = label.replace(/\s+/g, '-').toLowerCase();
-            card.id = `card-${id}`;
-            card.setAttribute('data-format', id); // Utilisé par le CSS pour l'aspect-ratio
+    // Handle WebSocket Messages
+    function handleWsMessage(data) {
+        if (data.type === 'progress') {
+            const cardId = `card-${data.format.replace(/\s+/g, '-')}`;
+            const progressBar = document.querySelector(`#${cardId} .progress-bar`);
+            const progressText = document.querySelector(`#${cardId} .progress-text`);
             
-            card.innerHTML = `
-                <div class="image-box">
-                    <img id="img-${id}" class="gen-image" src="" alt="${label}">
-                    <div class="card-progress-overlay" id="overlay-${id}">
-                        <div class="card-progress-fill" id="fill-${id}"></div>
-                    </div>
-                </div>
-                <div class="card-info">
-                    <div class="card-text">
-                        <span class="card-label">${label}</span>
-                        <span class="status-badge" id="badge-${id}">En attente</span>
-                    </div>
-                    <button id="dl-${id}" class="dl-btn" title="Télécharger">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                    </button>
-                </div>
-            `;
-            this.resultGrid.appendChild(card);
-        });
-    },
-
-    updateProgress(label, value) {
-        const id = label.replace(/\s+/g, '-').toLowerCase();
-        const fill = document.getElementById(`fill-${id}`);
-        const badge = document.getElementById(`badge-${id}`);
-        
-        if (fill) fill.style.width = `${value}%`;
-        if (badge) badge.textContent = `Calcul : ${value}%`;
-    },
-
-    displayFinalImage(label, base64) {
-        const id = label.replace(/\s+/g, '-').toLowerCase();
-        const img = document.getElementById(`img-${id}`);
-        const overlay = document.getElementById(`overlay-${id}`);
-        const badge = document.getElementById(`badge-${id}`);
-        const dlBtn = document.getElementById(`dl-${id}`);
-        
-        if (img) {
-            img.src = base64;
-            img.onload = () => {
-                img.classList.add('loaded');
-                if (overlay) overlay.classList.add('hidden');
-                
-                if (dlBtn) {
-                    dlBtn.classList.add('visible');
-                    dlBtn.onclick = () => {
-                        const a = document.createElement('a');
-                        a.href = base64;
-                        const safePrompt = this.promptInput.value.replace(/[^a-z0-9]/gi, '_').substring(0, 15).toLowerCase();
-                        a.download = `Visionary_${id}_${safePrompt}.png`;
-                        a.click();
-                    };
-                }
-
-                if (badge) {
-                    badge.textContent = "Terminé";
-                    badge.style.background = "rgba(139, 92, 246, 0.2)";
-                    badge.style.color = "white";
-                }
-            };
-        }
-    },
-
-    setLoading(isLoading) {
-        this.generateBtn.disabled = isLoading;
-        this.promptInput.disabled = isLoading;
-        const btnText = document.querySelector('.btn-text');
-        const loader = document.querySelector('.loader');
-
-        if (isLoading) {
-            btnText.textContent = "Session Active...";
-            loader.classList.remove('hidden');
-        } else {
-            btnText.textContent = "Démarrer la Session";
-            loader.classList.add('hidden');
-        }
-    }
-};
-
-/**
- * APP CONTROLLER - Orchestration globale
- */
-const AppController = {
-    init() {
-        UIManager.generateBtn.addEventListener('click', () => this.handleStart());
-        UIManager.promptInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') this.handleStart();
-        });
-    },
-
-    handleStart() {
-        const prompt = UIManager.promptInput.value.trim();
-        if (!prompt) return;
-
-        UIManager.setLoading(true);
-        UIManager.initPlaceholders();
-
-        // Connexion WebSocket
-        SocketService.connect(
-            (data) => this.handleServerMessage(data),
-            () => {
-                console.log("[*] Socket ouvert. Envoi du prompt.");
-                SocketService.send({ prompt: prompt });
-            },
-            () => {
-                console.log("[*] Socket fermé.");
-                UIManager.setLoading(false);
-            },
-            (err) => {
-                alert("Erreur WebSocket. Vérifiez le serveur.");
-                UIManager.setLoading(false);
+            if (progressBar && progressText) {
+                progressBar.style.width = `${data.progress}%`;
+                progressText.textContent = `${data.progress}% (${data.step}/${data.total_steps})`;
             }
-        );
-    },
+        } 
+        else if (data.type === 'image') {
+            const cardId = `card-${data.format.replace(/\s+/g, '-')}`;
+            const card = document.getElementById(cardId);
+            if (card) {
+                const img = card.querySelector('.result-image');
+                const placeholder = card.querySelector('.placeholder');
+                const progressContainer = card.querySelector('.progress-container');
+                const progressText = card.querySelector('.progress-text');
+                const downloadBtn = card.querySelector('.download-btn');
 
-    handleServerMessage(data) {
-        switch (data.type) {
-            case 'progress':
-                UIManager.updateProgress(data.label, data.value);
-                break;
-            case 'image':
-                UIManager.displayFinalImage(data.label, data.base64);
-                break;
-            case 'complete':
-                console.log("[+] Toute la session est terminée.");
-                SocketService.close();
-                break;
-            case 'error':
-                alert("Erreur Serveur: " + data.message);
-                SocketService.close();
-                break;
+                img.src = data.image;
+                img.onload = () => {
+                    if (placeholder) placeholder.style.display = 'none';
+                    img.classList.add('loaded');
+                };
+
+                if (progressContainer) progressContainer.style.display = 'none';
+                if (progressText) progressText.textContent = 'GÉNÉRATION TERMINÉE !';
+                
+                if (downloadBtn) {
+                    downloadBtn.href = data.image;
+                    downloadBtn.download = `Visionary_${data.format.replace(/\s+/g, '_')}.png`;
+                    downloadBtn.style.display = 'block';
+                }
+            }
+        }
+        else if (data.type === 'complete') {
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('generating');
+                generateBtn.textContent = 'GÉNÉRER';
+            }
+        }
+        else if (data.type === 'error') {
+            alert('Erreur du serveur: ' + data.message);
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('generating');
+                generateBtn.textContent = 'GÉNÉRER';
+            }
         }
     }
-};
 
-// Start App
-AppController.init();
+    // Upload & Drag-n-Drop Logic
+    if (uploadArea && imageUpload) {
+        uploadArea.addEventListener('click', () => imageUpload.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        imageUpload.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFile(e.target.files[0]);
+            }
+        });
+    }
+
+    function handleFile(file) {
+        if (!file.type.startsWith('image/')) {
+            alert("Seules les images sont autorisées !");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            base64Image = e.target.result;
+            if (imagePreview) {
+                imagePreview.src = base64Image;
+                imagePreview.style.display = 'block';
+            }
+            if (uploadText) {
+                uploadText.style.display = 'none';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Strength Slider
+    if (strengthSlider && strengthVal) {
+        strengthSlider.addEventListener('input', (e) => {
+            strengthVal.textContent = e.target.value;
+        });
+    }
+
+    // Generate Action
+    if (generateBtn) {
+        generateBtn.addEventListener('click', () => {
+            const prompt = promptInput ? promptInput.value.trim() : "";
+            if (!prompt) {
+                alert("Veuillez entrer un prompt magique !");
+                return;
+            }
+
+            const checkboxes = document.querySelectorAll('.format-checkbox input:checked');
+            if (checkboxes.length === 0) {
+                alert("Veuillez sélectionner au moins un format de sortie.");
+                return;
+            }
+
+            const formats = Array.from(checkboxes).map(cb => ({
+                name: cb.dataset.name,
+                width: parseInt(cb.dataset.width),
+                height: parseInt(cb.dataset.height)
+            }));
+
+            const requestData = {
+                prompt: prompt,
+                init_image: base64Image,
+                formats: formats,
+                strength: strengthSlider ? parseFloat(strengthSlider.value) : 0.75
+            };
+
+            // Prepare UI
+            if (emptyState) emptyState.style.display = 'none';
+            generateBtn.disabled = true;
+            generateBtn.classList.add('generating');
+            generateBtn.textContent = 'TRAITEMENT IA...';
+            
+            // Setup Grid
+            if (resultsGrid) {
+                resultsGrid.innerHTML = '';
+                formats.forEach(f => {
+                    const aspect = f.width / f.height;
+                    const cardId = `card-${f.name.replace(/\s+/g, '-')}`;
+                    
+                    const cardHTML = `
+                        <div class="result-card" id="${cardId}">
+                            <div class="card-header">
+                                <span>${f.name}</span>
+                                <span style="opacity: 0.6;">${f.width}x${f.height}</span>
+                            </div>
+                            <div class="image-container" style="aspect-ratio: ${aspect};">
+                                <div class="placeholder"></div>
+                                <img class="result-image" alt="${f.name}">
+                            </div>
+                            <div style="margin-top:auto;">
+                                <div class="progress-text">Connexion neuronale...</div>
+                                <div class="progress-container">
+                                    <div class="progress-bar"></div>
+                                </div>
+                            </div>
+                            <a class="download-btn">TÉLÉCHARGER LA CRÉATION</a>
+                        </div>
+                    `;
+                    resultsGrid.insertAdjacentHTML('beforeend', cardHTML);
+                });
+            }
+
+            // Send to WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(requestData));
+            } else {
+                alert("Système hors-ligne. Serveur WebSocket introuvable.");
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('generating');
+                generateBtn.textContent = 'GÉNÉRER';
+            }
+        });
+    }
+
+    // Initialize Connection on Load
+    connectWebSocket();
+});
