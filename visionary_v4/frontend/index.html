@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visionary V4 - Pro AI Studio</title>
+    <!-- Styles et Polices -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/main.css">
+    
+    <!-- Scripts (Defer -> chargés après le DOM) -->
+    <script src="js/ui_manager.js" defer></script>
+    <script src="js/socket_client.js" defer></script>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- ---------------- PANNEAU DE CONTRÔLE GAUCHE ---------------- -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <h1>VISIONARY <span>V4</span></h1>
+                <p>Pro Ad Studio</p>
+            </div>
+
+            <!-- Paramètre : Prompt -->
+            <div class="control-group">
+                <label for="prompt-input">Prompt Créatif</label>
+                <textarea id="prompt-input" placeholder="Décrivez l'ambiance de la publicité (ex: le produit posé sur du marbre noir avec une lumière dramatique et un effet fumée, 4k...)"></textarea>
+            </div>
+
+            <!-- Paramètre : Photos Produits (IP-Adapter) -->
+            <div class="control-group">
+                <label>Photos du Produit (Multi-angles, Max 9)</label>
+                <div id="drop-zone" class="drop-zone">
+                    <span class="drop-text">Glissez-déposez vos photos de produits ici ou cliquez pour parcourir</span>
+                    <input type="file" id="file-input" accept="image/*" multiple hidden>
+                </div>
+                <!-- Galerie dynamique pour les images uploadées -->
+                <div id="image-gallery" class="image-gallery"></div>
+                <span id="image-counter" class="counter-text">0 / 9</span>
+            </div>
+
+            <!-- Paramètre : Format -->
+            <div class="control-group">
+                <label>Format Publicitaire ciblée</label>
+                <div class="selector-group" id="format-selector">
+                    <button class="select-btn active" data-value="post">Post (1:1)</button>
+                    <button class="select-btn" data-value="story">Story (9:16)</button>
+                    <button class="select-btn" data-value="landscape">Paysage (16:9)</button>
+                </div>
+            </div>
+
+            <!-- Paramètre : Niveau de Render -->
+            <div class="control-group">
+                <label>Niveau de rendu (VRAM)</label>
+                <div class="selector-group" id="quality-selector">
+                    <button class="select-btn active" data-value="standard">Standard (Rapide)</button>
+                    <button class="select-btn" data-value="high">High (Détaillé)</button>
+                    <button class="select-btn" data-value="pro">Pro (Ultra)</button>
+                </div>
+            </div>
+
+            <!-- Action Principale -->
+            <button id="generate-btn" class="generate-btn">GÉNÉRER LA PUBLICITÉ</button>
+        </aside>
+
+        <!-- ---------------- CONSOLE DE RENDU DROITE ---------------- -->
+        <main class="console-area">
+            <header class="console-header">
+                <h2>CONSOLE DE RENDU STUDIO</h2>
+                <div class="connection-status">
+                    <span id="socket-status-dot" class="status-dot"></span>
+                    <span id="socket-status-text">Hors ligne</span>
+                </div>
+            </header>
+            
+            <div id="render-container" class="render-container">
+                <!-- État par défaut (Vide) -->
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-icon">✧</div>
+                    <p>En attente de paramètres de rendu...</p>
+                    <p style="font-size: 13px; opacity: 0.6; margin-top: 5px;">Ajustez vos options à gauche et lancez le Moteur IA</p>
+                </div>
+                <!-- Les cartes de génération apparaitront ici dynamiquement via JS -->
+            </div>
+        </main>
+    </div>
+</body>
+</html>
