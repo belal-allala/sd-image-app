@@ -1,200 +1,244 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Récupération des éléments du DOM
-    const promptInput = document.getElementById('prompt-input');
+    // UI Elements with safely fallback checks
+    const uploadArea = document.getElementById('upload-area');
+    const imageUpload = document.getElementById('image-upload');
+    const imagePreview = document.getElementById('image-preview');
+    const uploadText = document.getElementById('upload-text');
+    const strengthSlider = document.getElementById('strength');
+    const strengthVal = document.getElementById('strength-val');
     const generateBtn = document.getElementById('generate-btn');
-    const btnText = document.querySelector('.btn-text');
-    const loader = document.querySelector('.loader');
-    
-    const stepsSlider = document.getElementById('steps-slider');
-    const stepsValue = document.getElementById('steps-value');
-    
-    const resultSection = document.getElementById('result-section');
-    const actionsSection = document.getElementById('actions-section');
-    const downloadBtn = document.getElementById('download-btn');
-    
-    // Nouveaux éléments pour la progression
-    const progressContainer = document.getElementById('progress-container');
-    const progressFill = document.getElementById('progress-fill');
-    const progressPercent = document.getElementById('progress-percent');
-    
-    // Garder en mémoire l'image générée
-    let currentImageBlob = null;
+    const promptInput = document.getElementById('prompt');
+    const resultsGrid = document.getElementById('results-grid');
+    const emptyState = document.getElementById('empty-state');
+    const wsStatusDot = document.getElementById('ws-status');
+    const wsStatusText = document.getElementById('ws-text');
 
-    // Mise à jour de l'affichage du slider en temps réel
-    stepsSlider.addEventListener('input', (e) => {
-        stepsValue.textContent = e.target.value;
-    });
+    // Make sure we break gracefully if something is missing
+    if (!generateBtn) {
+        console.error("Critical UI component missing: 'generate-btn' not found in the DOM. Ensure index.html is loaded correctly.");
+        return;
+    }
 
-    /**
-     * Gère l'état visuel de l'interface en mode "Chargement"
-     */
-    const setGeneratingState = (isGenerating) => {
-        generateBtn.disabled = isGenerating;
-        promptInput.disabled = isGenerating;
-        stepsSlider.disabled = isGenerating;
+    let base64Image = null;
+    let ws = null;
 
-        if (isGenerating) {
-            // Cacher le texte, montrer le spinner
-            btnText.classList.add('hidden');
-            loader.classList.remove('hidden');
-            
-            // Animation personnalisée pour faire patienter
-            resultSection.innerHTML = `
-                <div class="placeholder-content step-pulse">
-                    <p style="font-size:1.1rem; color:#fff">💫 Génération en cours...</p>
-                    <small style="opacity:0.6; display:block; margin-top:8px;">L'IA crée votre image, veuillez patienter.</small>
-                </div>
-            `;
-            
-            actionsSection.classList.add('hidden');
-            resultSection.style.border = '2px dashed var(--glass-border)';
-            
-            // Ajout dynamique de la keyframe si elle n'existe pas
-            if (!document.getElementById('anim-style')) {
-                const style = document.createElement('style');
-                style.id = 'anim-style';
-                style.innerHTML = `
-                    @keyframes pulseFeedback {
-                        0% { opacity: 0.5; transform: scale(0.98); }
-                        50% { opacity: 1; transform: scale(1.02); }
-                        100% { opacity: 0.5; transform: scale(0.98); }
-                    }
-                    .step-pulse { animation: pulseFeedback 2s infinite ease-in-out; }
-                `;
-                document.head.appendChild(style);
-            }
+    // Connect WebSocket
+    function connectWebSocket() {
+        if (!wsStatusDot || !wsStatusText) return;
 
-        } else {
-            // Remettre à la normale
-            btnText.classList.remove('hidden');
-            loader.classList.add('hidden');
-        }
-    };
-
-    /**
-     * Affiche une erreur dans la zone de résultat
-     */
-    const showError = (message) => {
-        resultSection.innerHTML = `
-            <div class="placeholder-content" style="color: #ef4444;">
-                <p>⚠️ Erreur : ${message}</p>
-                <small style="opacity:0.7">Vérifiez la console ou relancez le serveur.</small>
-            </div>
-        `;
-        progressContainer.classList.add('hidden');
-    };
-
-    /**
-     * Appelle le Backend via WebSocket pour une progression en temps réel
-     */
-    const generateImage = () => {
-        const prompt = promptInput.value.trim();
-        if (!prompt) return;
-
-        const steps = parseInt(stepsSlider.value);
-        setGeneratingState(true);
-
-        // Initialisation de la barre de progression
-        progressContainer.classList.remove('hidden');
-        progressFill.style.width = '0%';
-        progressPercent.textContent = '0%';
-
-        // Détection du protocole automatique
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/generate`;
+        const host = window.location.host || 'localhost:8000'; 
+        const wsUrl = `${protocol}//${host}/ws/generate`;
         
-        const socket = new WebSocket(wsUrl);
+        ws = new WebSocket(wsUrl);
 
-        socket.onopen = () => {
-            console.log("[*] WebSocket connecté, envoi du prompt...");
-            socket.send(JSON.stringify({ prompt, steps }));
+        ws.onopen = () => {
+            wsStatusDot.classList.remove('disconnected');
+            wsStatusDot.classList.add('connected');
+            wsStatusText.textContent = 'CONNECTÉ';
+            if (generateBtn) generateBtn.disabled = false;
         };
 
-        socket.onmessage = async (event) => {
-            const data = JSON.parse(event.data);
+        ws.onclose = () => {
+            wsStatusDot.classList.remove('connected');
+            wsStatusDot.classList.add('disconnected');
+            wsStatusText.textContent = 'DÉCONNECTÉ';
+            if (generateBtn) generateBtn.disabled = true;
+            setTimeout(connectWebSocket, 3000); // Auto reconnect
+        };
 
-            if (data.type === 'progress') {
-                const val = data.value;
-                progressFill.style.width = `${val}%`;
-                progressPercent.textContent = `${val}%`;
-            } else if (data.type === 'finish') {
-                const imgData = data.image; // Base64
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleWsMessage(data);
+        };
+    }
+
+    // Handle WebSocket Messages
+    function handleWsMessage(data) {
+        if (data.type === 'progress') {
+            const cardId = `card-${data.format.replace(/\s+/g, '-')}`;
+            const progressBar = document.querySelector(`#${cardId} .progress-bar`);
+            const progressText = document.querySelector(`#${cardId} .progress-text`);
+            
+            if (progressBar && progressText) {
+                progressBar.style.width = `${data.progress}%`;
+                progressText.textContent = `${data.progress}% (${data.step}/${data.total_steps})`;
+            }
+        } 
+        else if (data.type === 'image') {
+            const cardId = `card-${data.format.replace(/\s+/g, '-')}`;
+            const card = document.getElementById(cardId);
+            if (card) {
+                const img = card.querySelector('.result-image');
+                const placeholder = card.querySelector('.placeholder');
+                const progressContainer = card.querySelector('.progress-container');
+                const progressText = card.querySelector('.progress-text');
+                const downloadBtn = card.querySelector('.download-btn');
+
+                img.src = data.image;
+                img.onload = () => {
+                    if (placeholder) placeholder.style.display = 'none';
+                    img.classList.add('loaded');
+                };
+
+                if (progressContainer) progressContainer.style.display = 'none';
+                if (progressText) progressText.textContent = 'GÉNÉRATION TERMINÉE !';
                 
-                // Conversion en blob pour le bouton de téléchargement
-                const res = await fetch(imgData);
-                currentImageBlob = await res.blob();
-                
-                renderImage(imgData);
-                socket.close();
-            } else if (data.type === 'error') {
-                showError(data.message);
-                socket.close();
+                if (downloadBtn) {
+                    downloadBtn.href = data.image;
+                    downloadBtn.download = `Visionary_${data.format.replace(/\s+/g, '_')}.png`;
+                    downloadBtn.style.display = 'block';
+                }
+            }
+        }
+        else if (data.type === 'complete') {
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('generating');
+                generateBtn.textContent = 'GÉNÉRER';
+            }
+        }
+        else if (data.type === 'error') {
+            alert('Erreur du serveur: ' + data.message);
+            if (generateBtn) {
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('generating');
+                generateBtn.textContent = 'GÉNÉRER';
+            }
+        }
+    }
+
+    // Upload & Drag-n-Drop Logic
+    if (uploadArea && imageUpload) {
+        uploadArea.addEventListener('click', () => imageUpload.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        imageUpload.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFile(e.target.files[0]);
+            }
+        });
+    }
+
+    function handleFile(file) {
+        if (!file.type.startsWith('image/')) {
+            alert("Seules les images sont autorisées !");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            base64Image = e.target.result;
+            if (imagePreview) {
+                imagePreview.src = base64Image;
+                imagePreview.style.display = 'block';
+            }
+            if (uploadText) {
+                uploadText.style.display = 'none';
             }
         };
+        reader.readAsDataURL(file);
+    }
 
-        socket.onerror = (error) => {
-            console.error('WebSocket Error:', error);
-            showError('Échec de la connexion WebSocket.');
-        };
+    // Strength Slider
+    if (strengthSlider && strengthVal) {
+        strengthSlider.addEventListener('input', (e) => {
+            strengthVal.textContent = e.target.value;
+        });
+    }
 
-        socket.onclose = () => {
-            console.log("[*] WebSocket fermé.");
-            setGeneratingState(false);
-        };
-    };
+    // Generate Action
+    if (generateBtn) {
+        generateBtn.addEventListener('click', () => {
+            const prompt = promptInput ? promptInput.value.trim() : "";
+            if (!prompt) {
+                alert("Veuillez entrer un prompt magique !");
+                return;
+            }
 
-    /**
-     * Affiche l'image dans l'UI une fois reçue
-     */
-    const renderImage = (imageUrl) => {
-        resultSection.innerHTML = ''; // Nettoie le conteneur
-        
-        const img = document.createElement('img');
-        img.src = imageUrl;
-        img.className = 'generated-image';
-        
-        // Effet de fade-in gracieux une fois chargée par le navigateur
-        img.onload = () => {
-            img.classList.add('loaded');
-        };
+            const checkboxes = document.querySelectorAll('.format-checkbox input:checked');
+            if (checkboxes.length === 0) {
+                alert("Veuillez sélectionner au moins un format de sortie.");
+                return;
+            }
 
-        resultSection.appendChild(img);
-        resultSection.style.border = 'none'; // Retire la bordure pointillée
-        
-        // Affiche le bouton de téléchargement
-        actionsSection.classList.remove('hidden');
-    };
+            const formats = Array.from(checkboxes).map(cb => ({
+                name: cb.dataset.name,
+                width: parseInt(cb.dataset.width),
+                height: parseInt(cb.dataset.height)
+            }));
 
-    /**
-     * Télécharge le Blob en tant qu'image PNG locale
-     */
-    const downloadImage = () => {
-        if (!currentImageBlob) return;
-        
-        const url = URL.createObjectURL(currentImageBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        // Nom de fichier intelligent basé sur le prompt
-        const safePrompt = promptInput.value.replace(/[^a-z0-9]/gi, '_').substring(0, 20).toLowerCase();
-        a.download = `visionary_${safePrompt}.png`;
-        
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
+            const requestData = {
+                prompt: prompt,
+                init_image: base64Image,
+                formats: formats,
+                strength: strengthSlider ? parseFloat(strengthSlider.value) : 0.75
+            };
 
-    // Événements
-    generateBtn.addEventListener('click', generateImage);
-    
-    // Support de la touche "Entrée"
-    promptInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            generateImage();
-        }
-    });
-    
-    downloadBtn.addEventListener('click', downloadImage);
+            // Prepare UI
+            if (emptyState) emptyState.style.display = 'none';
+            generateBtn.disabled = true;
+            generateBtn.classList.add('generating');
+            generateBtn.textContent = 'TRAITEMENT IA...';
+            
+            // Setup Grid
+            if (resultsGrid) {
+                resultsGrid.innerHTML = '';
+                formats.forEach(f => {
+                    const aspect = f.width / f.height;
+                    const cardId = `card-${f.name.replace(/\s+/g, '-')}`;
+                    
+                    const cardHTML = `
+                        <div class="result-card" id="${cardId}">
+                            <div class="card-header">
+                                <span>${f.name}</span>
+                                <span style="opacity: 0.6;">${f.width}x${f.height}</span>
+                            </div>
+                            <div class="image-container" style="aspect-ratio: ${aspect};">
+                                <div class="placeholder"></div>
+                                <img class="result-image" alt="${f.name}">
+                            </div>
+                            <div style="margin-top:auto;">
+                                <div class="progress-text">Connexion neuronale...</div>
+                                <div class="progress-container">
+                                    <div class="progress-bar"></div>
+                                </div>
+                            </div>
+                            <a class="download-btn">TÉLÉCHARGER LA CRÉATION</a>
+                        </div>
+                    `;
+                    resultsGrid.insertAdjacentHTML('beforeend', cardHTML);
+                });
+            }
+
+            // Send to WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(requestData));
+            } else {
+                alert("Système hors-ligne. Serveur WebSocket introuvable.");
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('generating');
+                generateBtn.textContent = 'GÉNÉRER';
+            }
+        });
+    }
+
+    // Initialize Connection on Load
+    connectWebSocket();
 });
